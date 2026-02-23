@@ -1,25 +1,60 @@
-Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-if ($dialog.ShowDialog() -ne "OK") { return }
+# 出力ファイル名のサフィックス（例: _領収書）。必要に応じて編集してください。
+$FilenameSuffix = "_領収書"
 
-$folder = $dialog.SelectedPath
+# フォルダはこのスクリプトのあるフォルダを使用
+$folder = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+if (-not $folder) { $folder = Get-Location }
 
-$images = Get-ChildItem $folder -Include *.png, *.jpg, *.jpeg -Recurse |
+$images = Get-ChildItem -Path $folder -File |
+          Where-Object { $_.Extension -match '(?i)\.(png|jpe?g)$' } |
           Sort-Object FullName
 
-if ($images.Count -eq 0) { return }
+if ($images.Count -eq 0) {
+    Write-Host "画像ファイルが見つかりません: $folder"
+    return
+}
 
 $date = Get-Date -Format "yyyyMMdd"
-$outputPdf = Join-Path $folder "$date.pdf"
+$outputPdf = Join-Path $folder "$date$FilenameSuffix.pdf"
+
+# 既に出力ファイルが存在する場合は上書き可否を確認
+# if (Test-Path $outputPdf) {
+#     $answer = Read-Host "出力ファイル '$outputPdf' は既に存在します。上書きしますか？ (y/n)"
+#     if ($answer -notin @('y','Y','yes','Yes','はい')) {
+#         Write-Host "スキップ: 既存の出力ファイルを保持します: $outputPdf"
+#         return
+#     }
+#     try {
+#         Remove-Item -Path $outputPdf -Force -ErrorAction Stop
+#     } catch {
+#         Write-Host "上書き準備に失敗しました（ファイルが開かれている可能性があります）： $outputPdf"
+#         return
+#     }
+# }
+
+if (Test-Path $outputPdf) {
+    $answer = Read-Host "出力ファイル '$outputPdf' は既に存在します。上書きしますか？ (y/n)"
+    if ($answer -notin @('y','Y','yes','Yes','はい')) {
+        Write-Host "処理を中止しました"
+        Read-Host "Enterキーで終了します"
+        return
+    }
+    try {
+        Remove-Item -Path $outputPdf -Force -ErrorAction Stop
+    } catch {
+        Write-Host "上書き準備に失敗しました（ファイルが開かれている可能性があります）： $outputPdf"
+        return
+    }
+}
 
 $printDoc = New-Object System.Drawing.Printing.PrintDocument
 $printDoc.PrinterSettings.PrinterName = "Microsoft Print to PDF"
 $printDoc.PrinterSettings.PrintToFile = $true
 $printDoc.PrinterSettings.PrintFileName = $outputPdf
 
-$script:current = 0   # ← 重要（scriptスコープ）
+$script:current = 0
 
 $printDoc.add_PrintPage({
     param($sender, $e)
@@ -50,6 +85,12 @@ $printDoc.add_PrintPage({
     $e.HasMorePages = ($script:current -lt $images.Count)
 })
 
-$printDoc.Print()
+try {
+    $printDoc.Print()
+} catch {
+    Write-Host "印刷中にエラーが発生しました。出力をスキップします: $outputPdf"
+    Write-Host $_.Exception.Message
+    return
+}
 
 Write-Host "完了: $outputPdf"
