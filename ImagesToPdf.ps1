@@ -19,21 +19,6 @@ if ($images.Count -eq 0) {
 $date = Get-Date -Format "yyyyMMdd"
 $outputPdf = Join-Path $folder "$date$FilenameSuffix.pdf"
 
-# 既に出力ファイルが存在する場合は上書き可否を確認
-# if (Test-Path $outputPdf) {
-#     $answer = Read-Host "出力ファイル '$outputPdf' は既に存在します。上書きしますか？ (y/n)"
-#     if ($answer -notin @('y','Y','yes','Yes','はい')) {
-#         Write-Host "スキップ: 既存の出力ファイルを保持します: $outputPdf"
-#         return
-#     }
-#     try {
-#         Remove-Item -Path $outputPdf -Force -ErrorAction Stop
-#     } catch {
-#         Write-Host "上書き準備に失敗しました（ファイルが開かれている可能性があります）： $outputPdf"
-#         return
-#     }
-# }
-
 if (Test-Path $outputPdf) {
     $answer = Read-Host "出力ファイル '$outputPdf' は既に存在します。上書きしますか？ (y/n)"
     if ($answer -notin @('y','Y','yes','Yes','はい')) {
@@ -66,6 +51,22 @@ $printDoc.add_PrintPage({
 
     $img = [System.Drawing.Image]::FromFile($images[$script:current].FullName)
 
+    # EXIF Orientationを適用
+    $orientationId = 0x0112
+    if ($img.PropertyIdList -contains $orientationId) {
+        $prop = $img.GetPropertyItem($orientationId)
+        $orientation = $prop.Value[0]
+
+        switch ($orientation) {
+            3 { $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone) }
+            6 { $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone) }
+            8 { $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate270FlipNone) }
+        }
+
+        # Orientationタグ削除（再回転防止）
+        $img.RemovePropertyItem($orientationId)
+    }
+
     $ratioX = $e.MarginBounds.Width / $img.Width
     $ratioY = $e.MarginBounds.Height / $img.Height
     $ratio = [Math]::Min($ratioX, $ratioY)
@@ -73,8 +74,8 @@ $printDoc.add_PrintPage({
     $width  = $img.Width * $ratio
     $height = $img.Height * $ratio
 
-    $x = ($e.MarginBounds.Width - $width) / 2
-    $y = ($e.MarginBounds.Height - $height) / 2
+    $x = $e.MarginBounds.Left + ($e.MarginBounds.Width - $width) / 2
+    $y = $e.MarginBounds.Top  + ($e.MarginBounds.Height - $height) / 2
 
     $e.Graphics.DrawImage($img, $x, $y, $width, $height)
 
