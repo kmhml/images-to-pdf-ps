@@ -22,7 +22,7 @@
 
 ## 📦 動作環境
 
-````markdown
+
 # Images to PDF (PowerShell)
 
 PNG / JPEG 画像をまとめて 1 つの PDF に変換する PowerShell スクリプトです。
@@ -81,4 +81,3 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 - 出力PDFが既に存在する場合は上書きの確認を行い、ユーザーが許可した場合のみ上書きします
 	- 上書き準備（既存ファイルの削除）に失敗した場合（例: PDF が開かれている等）は処理を中止し、メッセージを出力します
 - 出力ファイル名のサフィックス部分はスクリプト先頭の `$FilenameSuffix` でハードコーディング可能
-````
